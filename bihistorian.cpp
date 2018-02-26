@@ -14,6 +14,16 @@
 using namespace binance;
 using namespace std;
 
+struct Trade
+{
+	char symbol[8];
+	double price;
+	double qty;
+	long id, time;
+	bool isBestMatch;
+	bool isBuyerMaker;
+};
+
 // Path to the binary data file containing historical trading data.
 string history_path = "$HOME/.bitrader/history.dat";
 
@@ -62,39 +72,82 @@ int main()
 		exit(1);
 	}
 
-	cout << "Getting all *BTC pairs ..." << endl;
+	cout << "Getting all trading pairs ..." << endl;
 
 	Json::Value pairs;
 
 	// Get all pairs.
 	BINANCE_ERR_CHECK(market.getAllPrices(pairs)); 
+	
+	vector<long> minIds(pairs.size());
+	for (int i = 0; i < pairs.size(); i++)
+		minIds[i] = numeric_limits<long>::max();
+
+	ifstream history(history_path.c_str(), ifstream::binary | ifstream::app);
+	if (history.is_open())
+	{
+		history.seekg(0, history.end);
+	    int length = history.tellg();
+	    
+	    if (length % sizeof(Trade))
+	    {
+	    	fprintf(stderr, "File length %d is not a multiply of the trade record size %zu\n",
+	    		length, sizeof(Trade));
+	    	fprintf(stderr, "malformed history data file or invalid format?\n");
+	    	exit(-1);
+	    }
+	
+		cout << "Reading existing historical data file ..." << endl;
+
+		for (Json::Value::ArrayIndex i = 0; i < pairs.size(); i++)
+		{
+			const string& symbol = pairs[i]["symbol"].asString();
+			
+			history.seekg(0, history.beg);
+
+			long minTime;
+			long& minId = minIds[i];
+			for (int j = 0, e = length / sizeof(Trade); j < e; j++)
+			{
+				Trade trade;
+				history.read((char*)&trade, sizeof(trade));
+				
+				if ((string)trade.symbol != symbol) continue;
+
+				if (minId > trade.id)
+				{
+					minId = trade.id;
+					minTime = trade.time;
+				}
+			}
+
+			if (minId == numeric_limits<long>::max())
+				cout << symbol << " : no data" << endl;
+			else
+				cout << symbol << " : " << minId << " (" << msSinceEpochToDate(minTime) << ")" << endl;
+		}
+		
+		history.close();
+		
+		cout << "OK" << endl;
+	}
 
 	cout << "Retrieving historical trades ..." << endl;
 
 	// Get historical trades for all *BTC pairs.
-	#pragma omp parallel for num_threads(2)
+	#pragma omp parallel for num_threads(4)
 	for (Json::Value::ArrayIndex i = 0; i < pairs.size(); i++)
 	{
 		const string& symbol = pairs[i]["symbol"].asString();
 
-		long minId = numeric_limits<long>::max();
-		while (1)
+		long& minId = minIds[i];
+		while (minId > 0)
 		{
 			Json::Value result;
 			if (minId != numeric_limits<long>::max())
 				BINANCE_ERR_CHECK(account.getHistoricalTrades(result, symbol.c_str(), max(0L, minId - 500 - 1)));
 			else
 				BINANCE_ERR_CHECK(account.getHistoricalTrades(result, symbol.c_str()));
-
-			struct Trade
-			{
-				char symbol[8];
-				double price;
-				double qty;
-				long id, time;
-				bool isBestMatch;
-				bool isBuyerMaker;
-			};
 
 			long minTime;
 			vector<Trade> trades(result.size());
@@ -120,7 +173,7 @@ int main()
 
 			#pragma omp critical
 			{
-				ofstream history(history_path.c_str(), ifstream::binary | ifstream::app);
+				ofstream history(history_path.c_str(), ofstream::binary | ifstream::app);
 				if (!history.is_open())
 				{
 					fprintf(stderr, "Cannot open history file for writing: %s\n", history_path.c_str());
@@ -129,11 +182,8 @@ int main()
 				history.write((char*)&trades[0], sizeof(Trade) * trades.size());
 				history.close();
 			}
-
 		
 			cout << symbol << " : " << minId << " (" << msSinceEpochToDate(minTime) << ")" << endl;
-			
-			if (minId == 0) break;
 		}
 	}
 
