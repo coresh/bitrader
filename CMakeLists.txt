@@ -32,3 +32,5 @@ link_directories(${CMAKE_CURRENT_BINARY_DIR}/tgbot-cpp)
 add_executable(bitrader bitrader.cpp telegram.h telegram.cpp telegram_bot.cpp)
 target_link_libraries(bitrader binance-cxx-api tgbot-cpp)
 
+add_executable(bihistorian bihistorian.cpp)
+target_link_libraries(bihistorian binance-cxx-api)
