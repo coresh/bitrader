@@ -144,10 +144,21 @@ int main()
 		while (minId > 0)
 		{
 			Json::Value result;
-			if (minId != numeric_limits<long>::max())
-				BINANCE_ERR_CHECK(account.getHistoricalTrades(result, symbol.c_str(), max(0L, minId - 500 - 1)));
-			else
-				BINANCE_ERR_CHECK(account.getHistoricalTrades(result, symbol.c_str()));
+			while (1)
+			{
+				binanceError_t status = binanceSuccess;
+				
+				if (minId != numeric_limits<long>::max())
+					status = account.getHistoricalTrades(result, symbol.c_str(), max(0L, minId - 500 - 1));
+				else
+					status = account.getHistoricalTrades(result, symbol.c_str());
+
+				if (status == binanceErrorEmptyServerResponse) continue;
+			
+				BINANCE_ERR_CHECK(status);
+			
+				break;
+			}
 
 			long minTime;
 			vector<Trade> trades(result.size());
