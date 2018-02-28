@@ -74,24 +74,41 @@ int main()
 
 	cout << "Getting all trading pairs ..." << endl;
 
-	Json::Value pairs;
+	vector<string> pairs;
+	map<string, int> pairsmap;
 
 	// Get all pairs.
-	BINANCE_ERR_CHECK(market.getAllPrices(pairs)); 
+	{
+		Json::Value symbols;
+		BINANCE_ERR_CHECK(market.getAllPrices(symbols));
+		
+		pairs.resize(symbols.size());
+		for (Json::Value::ArrayIndex i = 0; i < pairs.size(); i++)
+		{
+			const string& symbol = symbols[i]["symbol"].asString();
+			
+			pairs[i] = symbol;
+			
+			// Trim symbol to 8 chars max (incl. '\0'), as we have in our database.
+			Trade trade;
+			pairsmap[string(symbol.c_str(), symbol.c_str() + min(symbol.size(), sizeof(trade.symbol) - 1))] = i + 1;
+		}
+	}
 	
 	vector<long> minIds(pairs.size());
+	vector<long> minTimes(pairs.size());
 	for (int i = 0; i < pairs.size(); i++)
 		minIds[i] = numeric_limits<long>::max();
 
-	ifstream history(history_path.c_str(), ifstream::binary | ifstream::app);
+	ifstream history(history_path.c_str(), ifstream::binary);
 	if (history.is_open())
 	{
 		history.seekg(0, history.end);
-	    int length = history.tellg();
+	    size_t length = history.tellg();
 	    
 	    if (length % sizeof(Trade))
 	    {
-	    	fprintf(stderr, "File length %d is not a multiply of the trade record size %zu\n",
+	    	fprintf(stderr, "File length %zu is not a multiply of the trade record size %zu\n",
 	    		length, sizeof(Trade));
 	    	fprintf(stderr, "malformed history data file or invalid format?\n");
 	    	exit(-1);
@@ -99,20 +116,38 @@ int main()
 	
 		cout << "Reading existing historical data file ..." << endl;
 
-		for (Json::Value::ArrayIndex i = 0; i < pairs.size(); i++)
-		{
-			const string& symbol = pairs[i]["symbol"].asString();
-			
-			history.seekg(0, history.beg);
+		history.seekg(0, history.beg);
 
-			long minTime;
-			long& minId = minIds[i];
-			for (int j = 0, e = length / sizeof(Trade); j < e; j++)
+		const size_t szbatch = 1024;
+		for (size_t j = 0, je = length / sizeof(Trade); j < je; j += szbatch)
+		{
+			vector<Trade> trades(szbatch);
+			history.read((char*)&trades[0], sizeof(Trade) * min(szbatch, je - j));
+			if (history.rdstate())
 			{
-				Trade trade;
-				history.read((char*)&trade, sizeof(trade));
+				fprintf(stderr, "Error reading historical data file: ");
+				if ((history.rdstate() & ifstream::eofbit) != 0)
+					fprintf(stderr, "End-of-File reached on input operation\n");
+				else if ((history.rdstate() & ifstream::failbit) != 0)
+					fprintf(stderr, "Logical error on i/o operation\n");
+				else if ((history.rdstate() & ifstream::badbit) != 0)
+					fprintf(stderr, "Read/writing error on i/o operation\n");
+				exit(1);
+			}
+			
+			for (int k = 0, ke = min(szbatch, je - j); k < ke; k++)
+			{
+				const Trade& trade = trades[k];
 				
-				if ((string)trade.symbol != symbol) continue;
+				int i = pairsmap[trade.symbol] - 1;
+				if (i == -1)
+				{
+					fprintf(stderr, "Cannot find symbol \"%s\" in pairsmap\n", trade.symbol);
+					exit(1);
+				}
+
+				long& minTime = minTimes[i];
+				long& minId = minIds[i];
 
 				if (minId > trade.id)
 				{
@@ -120,6 +155,16 @@ int main()
 					minTime = trade.time;
 				}
 			}
+		}
+
+		history.close();
+
+		for (int i = 0; i < pairs.size(); i++)
+		{
+			const string& symbol = pairs[i];
+
+			const long& minTime = minTimes[i];
+			const long& minId = minIds[i];
 
 			if (minId == numeric_limits<long>::max())
 				cout << symbol << " : no data" << endl;
@@ -127,18 +172,16 @@ int main()
 				cout << symbol << " : " << minId << " (" << msSinceEpochToDate(minTime) << ")" << endl;
 		}
 		
-		history.close();
-		
 		cout << "OK" << endl;
 	}
 
 	cout << "Retrieving historical trades ..." << endl;
 
 	// Get historical trades for all *BTC pairs.
-	#pragma omp parallel for num_threads(4)
-	for (Json::Value::ArrayIndex i = 0; i < pairs.size(); i++)
+	#pragma omp parallel for num_threads(6)
+	for (int i = 0; i < pairs.size(); i++)
 	{
-		const string& symbol = pairs[i]["symbol"].asString();
+		const string& symbol = pairs[i];
 
 		long& minId = minIds[i];
 		while (minId > 0)
