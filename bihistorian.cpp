@@ -178,7 +178,7 @@ int main()
 	cout << "Retrieving historical trades ..." << endl;
 
 	// Get historical trades for all *BTC pairs.
-	#pragma omp parallel for num_threads(6)
+	#pragma omp parallel for num_threads(6) schedule(dynamic, 1)
 	for (int i = 0; i < pairs.size(); i++)
 	{
 		const string& symbol = pairs[i];
