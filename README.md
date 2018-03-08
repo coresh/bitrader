@@ -12,6 +12,7 @@ BITrader - Trading and Alering Service for Binance Cryptocurrency Exchange (http
 ```
 sudo apt-get install libjsoncpp-dev libcurl4-nss-dev libwebsockets-dev
 sudo apt-get install g++ make binutils cmake libssl-dev libboost-system-dev libboost-iostreams-dev
+sudo apt-get install libarchive-dev
 ```
 
 ### Building

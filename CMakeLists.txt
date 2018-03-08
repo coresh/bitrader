@@ -22,15 +22,24 @@ set(CMAKE_BUILD_TYPE Release)
 add_subdirectory(binance-cxx-api)
 add_subdirectory(tgbot-cpp)
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/binance-cxx-api/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/tgbot-cpp/include)
+include_directories(${GTK3_INCLUDE_DIRS})
 
 link_directories(${CMAKE_CURRENT_BINARY_DIR}/binance-cxx-api)
 link_directories(${CMAKE_CURRENT_BINARY_DIR}/tgbot-cpp)
+link_directories(${GTK3_LIBRARY_DIRS})
 
 add_executable(bitrader bitrader.cpp telegram.h telegram.cpp telegram_bot.cpp)
 target_link_libraries(bitrader binance-cxx-api tgbot-cpp)
 
 add_executable(bihistorian bihistorian.cpp)
 target_link_libraries(bihistorian binance-cxx-api)
+
+add_executable(biviewer biviewer.cpp)
+target_link_libraries(biviewer ${GTK3_LIBRARIES} archive)
+
