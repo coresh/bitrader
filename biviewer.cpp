@@ -180,6 +180,8 @@ public :
 	ChartDrawer(const Viewport& viewport_) : viewport(viewport_) { }
 };
 
+class AnnotatedChartObject;
+
 class ChartObject
 {
 	bool isScrolling;
@@ -251,6 +253,41 @@ public :
 		g_signal_connect(G_OBJECT(drawing_area), "button_press_event", G_CALLBACK(ChartObject::onMouse), this);
 		g_signal_connect(G_OBJECT(drawing_area), "button_release_event", G_CALLBACK(ChartObject::onMouse), this);
 		g_signal_connect(G_OBJECT(drawing_area), "motion_notify_event", G_CALLBACK(ChartObject::onMove), this);
+	}
+	
+	friend class AnnotatedChartObject;
+};
+
+class AnnotatedChartObject
+{
+	ChartObject chart;
+	GtkWidget* grid;
+
+	static gboolean onDraw(GtkWidget* widget, cairo_t* cr, gpointer data)
+	{
+		AnnotatedChartObject* aco = (AnnotatedChartObject*)data;
+
+		guint width = gtk_widget_get_allocated_width(widget);
+		guint height = gtk_widget_get_allocated_height(widget);
+		Viewport viewport(width, height);
+
+		ChartDrawer chartDrawer(viewport);
+		chartDrawer.draw(cr, aco->chart.position, symbols["BATBTC"].candles["1min"], symbols["BATBTC"].maxSecond + 1);
+
+		return FALSE;
+	}
+
+public :
+
+	AnnotatedChartObject(GtkWidget* window) : chart(window)
+	{
+		grid = gtk_grid_new();
+		gtk_container_add(GTK_CONTAINER(window), grid);
+		gtk_widget_set_size_request(grid, 800, 600);
+
+		g_signal_connect(G_OBJECT(grid), "draw", G_CALLBACK(AnnotatedChartObject::onDraw), this);
+
+//		gtk_grid_attach(grid, chart.widget, 0, 0, 1, 1);
 	}
 };
 
@@ -427,7 +464,7 @@ gint main(int argc, char *argv[])
 	gtk_window_set_icon_name(GTK_WINDOW(window), "binance");
 	g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
-	ChartObject chart(window);
+	AnnotatedChartObject chart(window);
 
 	gtk_widget_show_all(window);
 	gtk_main();
