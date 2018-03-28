@@ -57,10 +57,12 @@ int main()
 		history_path = w[0];
 		wordfree(&p);
 	}
+	
+	Server server;
 
-	Market market;
+	Market market(server);
 
-	Account account;
+	Account account(server);
 	if (!account.keysAreSet())
 	{
 		fprintf(stderr, "\nCannot find the api/secret keys pair for Binance account!\n");
