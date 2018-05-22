@@ -48,6 +48,74 @@ struct Symbol
 
 map<string, Symbol> symbols;
 
+class BinanceColorScheme
+{
+	GdkRGBA backgroundColor;
+	GdkRGBA gridColor;
+	GdkRGBA candleColor;
+
+public :
+
+	const GdkRGBA& getBackgroundColor() const { return backgroundColor; }
+
+	const GdkRGBA& getGridColor() const { return gridColor; }
+
+	const GdkRGBA& getCandleColor() const { return candleColor; }
+	
+	BinanceColorScheme()
+	{
+		backgroundColor.red = 21 / 256.0;
+		backgroundColor.green = 26 / 256.0;
+		backgroundColor.blue = 29 / 256.0;
+		backgroundColor.alpha = 1.0;
+
+		gridColor.red = 49 / 256.0;
+		gridColor.green = 58 / 256.0;
+		gridColor.blue = 66 / 256.0;
+		gridColor.alpha = 1.0;
+
+		candleColor.red = 240 / 256.0;
+		candleColor.green = 184 / 256.0;
+		candleColor.blue = 12 / 256.0;
+		candleColor.alpha = 1.0;
+	}
+};
+
+class AppliedParallelComputingColorScheme
+{
+	GdkRGBA backgroundColor;
+	GdkRGBA gridColor;
+	GdkRGBA candleColor;
+
+public :
+
+	const GdkRGBA& getBackgroundColor() const { return backgroundColor; }
+
+	const GdkRGBA& getGridColor() const { return gridColor; }
+
+	const GdkRGBA& getCandleColor() const { return candleColor; }
+	
+	AppliedParallelComputingColorScheme()
+	{
+		backgroundColor.red = 256 / 256.0;
+		backgroundColor.green = 256 / 256.0;
+		backgroundColor.blue = 256 / 256.0;
+		backgroundColor.alpha = 1.0;
+
+		gridColor.red = 49 / 256.0;
+		gridColor.green = 58 / 256.0;
+		gridColor.blue = 66 / 256.0;
+		gridColor.alpha = 0.0625;
+
+		candleColor.red = 38 / 256.0;
+		candleColor.green = 73 / 256.0;
+		candleColor.blue = 158 / 256.0;
+		candleColor.alpha = 1.0;
+	}
+};
+
+static AppliedParallelComputingColorScheme colorScheme;
+
 class CandleDrawer
 {
 	const Viewport& viewport;
@@ -100,21 +168,14 @@ public :
 
 	void draw(cairo_t* cr, size_t& position, const vector<OHLC>& candles, size_t szcandles)
 	{
-		GdkRGBA color;
-		color.red = 21 / 256.0;
-		color.green = 26 / 256.0;
-		color.blue = 29 / 256.0;
-		color.alpha = 1.0;
+		GdkRGBA color = colorScheme.getBackgroundColor();
 		gdk_cairo_set_source_rgba(cr, &color);
 
 		cairo_rectangle(cr, 0, 0, viewport.width, viewport.height);
 		cairo_fill(cr);
 
 		cairo_set_line_width (cr, 1);
-		color.red = 49 / 256.0;
-		color.green = 58 / 256.0;
-		color.blue = 66 / 256.0;
-		color.alpha = 1.0;
+		color = colorScheme.getGridColor();
 		gdk_cairo_set_source_rgba(cr, &color);
 
 		const uint32_t ngridlines = 10;
@@ -127,10 +188,7 @@ public :
 			cairo_stroke(cr);
 		}
 
-		color.red = 240 / 256.0;
-		color.green = 184 / 256.0;
-		color.blue = 12 / 256.0;
-		color.alpha = 1.0;
+		color = colorScheme.getCandleColor();
 		gdk_cairo_set_source_rgba(cr, &color);
 
 		uint32_t ncandles = viewport.width / CandleDrawer::CANDLE_WIDTH;
@@ -168,10 +226,7 @@ public :
 		}		
 
 		cairo_set_line_width(cr, 2);
-		color.red = 49 / 256.0;
-		color.green = 58 / 256.0;
-		color.blue = 66 / 256.0;
-		color.alpha = 1.0;
+		color = colorScheme.getGridColor();
 		gdk_cairo_set_source_rgba(cr, &color);
 		cairo_rectangle(cr, 0, 0, viewport.width, viewport.height);
 		cairo_stroke(cr);
@@ -393,6 +448,9 @@ gint main(int argc, char *argv[])
 			}
 			break;
 		}
+
+		// XXX
+		if (name != "BATBTC") continue;
 		
 		if (name == "")
 		{
@@ -420,7 +478,8 @@ gint main(int argc, char *argv[])
 		
 		symbol.maxSecond = 0;
 		bool firstTrade = true;
-		const size_t szbatch = 1024;
+		const size_t szbatch = 1024 * 1024;
+		vector<OHLC>& candles = symbol.candles["1min"];
 		for (;;)
 		{
 			vector<Trade> trades(szbatch);
@@ -444,7 +503,6 @@ gint main(int argc, char *argv[])
 				
 				const uint64_t second = (trade.time - symbol.startTime) / (1000 * 60 * 30);
 				symbol.maxSecond = max(symbol.maxSecond, second);
-				vector<OHLC>& candles = symbol.candles["1min"];
 				if (candles.size() <= second)
 					candles.resize(candles.size() + szbatch);
 				
@@ -456,6 +514,9 @@ gint main(int argc, char *argv[])
 				candle.close = trade.price;
 			}
 		}
+		
+		// XXX
+		break;
 	}
 
 	gtk_init(&argc, &argv);
@@ -464,7 +525,7 @@ gint main(int argc, char *argv[])
 	gtk_window_set_icon_name(GTK_WINDOW(window), "binance");
 	g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
-	AnnotatedChartObject chart(window);
+	ChartObject chart(window);
 
 	gtk_widget_show_all(window);
 	gtk_main();
