@@ -106,15 +106,15 @@ int main()
 	if (history.is_open())
 	{
 		history.seekg(0, history.end);
-	    size_t length = history.tellg();
+		size_t length = history.tellg();
 	    
-	    if (length % sizeof(Trade))
-	    {
-	    	fprintf(stderr, "File length %zu is not a multiply of the trade record size %zu\n",
-	    		length, sizeof(Trade));
-	    	fprintf(stderr, "malformed history data file or invalid format?\n");
-	    	exit(-1);
-	    }
+		if (length % sizeof(Trade))
+		{
+			fprintf(stderr, "File length %zu is not a multiply of the trade record size %zu\n", 
+				length, sizeof(Trade));
+			fprintf(stderr, "malformed history data file or invalid format?\n");
+			exit(-1);
+		}
 	
 		cout << "Reading existing historical data file ..." << endl;
 
